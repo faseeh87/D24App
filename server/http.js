@@ -51,6 +51,8 @@ function setCookie(res, name, value, { maxAge, clear } = {}) {
 }
 
 function readJson(req, limit = 100 * 1024) {
+  // Hosts that pre-parse the body (e.g. Vercel helpers) leave it on req.body.
+  if (req.body !== undefined && req.body !== null && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) return Promise.resolve(req.body);
   return new Promise((resolve, reject) => {
     let size = 0; const chunks = [];
     req.on('data', (c) => {

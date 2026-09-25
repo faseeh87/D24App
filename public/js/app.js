@@ -642,7 +642,7 @@ async function viewNotifications() {
 setInterval(async () => {
   if (!S.me || document.hidden) return;
   try {
-    const { notifications } = await api('/api/notifications');
+    const { notifications } = await api('/api/notifications?fresh=0');
     const n = notifications.filter((x) => !x.read_at).length;
     if (n !== S.unread) {
       S.unread = n;

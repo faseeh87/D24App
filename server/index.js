@@ -1,24 +1,19 @@
 'use strict';
+// Local / VPS server. On Vercel, api/index.js is used instead.
 const http = require('node:http');
-const path = require('node:path');
 const config = require('./config');
-const { Router, createHandler } = require('./http');
-const { runReminders } = require('./domain');
+const { handler, sweep } = require('./app');
 
-const router = new Router();
-require('./routes-customer')(router);
-require('./routes-admin')(router);
-router.get('/api/health', () => ({ ok: true }));
-
-const server = http.createServer(createHandler({ router, publicDir: path.join(config.root, 'public') }));
+const server = http.createServer(handler);
 server.listen(config.port, () => {
   console.log(`D24 Studio app running on http://localhost:${config.port}  (staff panel: /admin)`);
+  console.log(`Database: ${config.dbUrl ? 'Turso ' + config.dbUrl : config.dbPath}`);
   console.log(`SMS provider: ${config.sms.provider}${config.sms.provider === 'console' ? ' (OTP codes are printed here)' : ''}`);
 });
 
 // Reminder sweep: at start-up and every hour (idempotent).
-const sweep = () => { try { runReminders(); } catch (e) { console.error('[reminders]', e); } };
-sweep();
-setInterval(sweep, 3600 * 1000).unref();
+const run = () => sweep().catch((e) => console.error('[reminders]', e));
+run();
+setInterval(run, 3600 * 1000).unref();
 
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => server.close(() => process.exit(0)));

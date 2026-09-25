@@ -34,6 +34,24 @@ npm test                           # API tests
 
 In development, `SMS_PROVIDER=console` prints OTP codes in the server log and shows them on the sign-in screen. The default staff PIN is `240024`. In production both `SESSION_SECRET` and `ADMIN_PIN` are required.
 
+## Deploying on Vercel
+
+The repo is ready for Vercel as it is. The `public/` folder is served as static files, `api/index.js` handles every `/api/*` request, and `vercel.json` sets the Mumbai region (`bom1`), security headers and a daily reminder cron.
+
+Vercel has no permanent disk, so the database is **Turso**, which is SQLite-compatible. Add these environment variables to the Vercel project:
+
+| Variable | Value |
+|---|---|
+| `TURSO_DATABASE_URL` | `libsql://<db>.turso.io` (set automatically by the Turso Marketplace integration) |
+| `TURSO_AUTH_TOKEN` | Turso database token (also set by the integration) |
+| `SESSION_SECRET` | long random string |
+| `ADMIN_PIN` | staff PIN, 6+ characters |
+| `CRON_SECRET` | random string, used by Vercel Cron to call `/api/cron/reminders` |
+| `NODEJS_HELPERS` | `0` |
+| `OTP_ON_SCREEN` | `true` shows the sign-in code on screen for testing **before** SMS is set up. Remove it before real customers use the app. |
+
+The tables are created automatically on first request. `GET /api/health` reports which database the app is using. Run `npm run test:remote` to test the Turso code path against a local libSQL stand-in.
+
 ## Going live
 
 1. **SMS.** Indian SMS needs DLT-registered templates.

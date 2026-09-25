@@ -2,7 +2,7 @@
 // End-to-end API tests: boots the server on a temp database and exercises the main flows.
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
-const { spawn, execFileSync } = require('node:child_process');
+const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -33,16 +33,27 @@ async function login(c, phone) {
   return v.body.customer;
 }
 
+let shim;
 before(async () => {
+  // TEST_REMOTE=1 runs the whole suite against the Turso (libSQL HTTP) backend via a local shim.
+  if (process.env.TEST_REMOTE) {
+    shim = await require('./hrana-shim').start(path.join(dir, 'remote.db'), 3998);
+    env.TURSO_DATABASE_URL = 'http://localhost:3998';
+    env.TURSO_AUTH_TOKEN = 'test-token';
+  }
   const flags = ['--disable-warning=ExperimentalWarning'];
-  execFileSync(process.execPath, [...flags, 'server/seed.js'], { env, cwd: path.join(__dirname, '..') });
+  // async (not execFileSync): the shim runs in this process and must keep serving.
+  await new Promise((resolve, reject) => {
+    const p = spawn(process.execPath, [...flags, 'server/seed.js'], { env, cwd: path.join(__dirname, '..'), stdio: 'inherit' });
+    p.on('exit', (code) => (code === 0 ? resolve() : reject(new Error('seed failed: ' + code))));
+  });
   srv = spawn(process.execPath, [...flags, 'server/index.js'], { env, cwd: path.join(__dirname, '..'), stdio: 'ignore' });
   for (let i = 0; i < 50; i++) {
     try { await fetch(BASE + '/api/health'); return; } catch { await new Promise((r) => setTimeout(r, 100)); }
   }
   throw new Error('server did not start');
 });
-after(() => { srv?.kill(); fs.rmSync(dir, { recursive: true, force: true }); });
+after(() => { srv?.kill(); shim?.close(); fs.rmSync(dir, { recursive: true, force: true }); });
 
 test('rejects invalid phone numbers and requires auth', async () => {
   const c = client();

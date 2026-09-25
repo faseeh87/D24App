@@ -31,6 +31,13 @@ module.exports = {
   production,
   port: Number(env.PORT || 3000),
   dbPath: path.resolve(ROOT, env.DB_PATH || 'data/d24.db'),
+  // Turso / libSQL (required on Vercel). The Vercel Marketplace integration sets TURSO_*.
+  dbUrl: env.TURSO_DATABASE_URL || env.LIBSQL_URL || env.DATABASE_URL_LIBSQL || '',
+  dbToken: env.TURSO_AUTH_TOKEN || env.LIBSQL_AUTH_TOKEN || '',
+  vercel: !!env.VERCEL,
+  cronSecret: env.CRON_SECRET || '',
+  // Shows the OTP on screen instead of requiring SMS. For testing before an SMS provider is set up only.
+  otpOnScreen: env.OTP_ON_SCREEN === 'true',
   secret,
   adminPinHash: crypto.createHash('sha256').update(String(env.ADMIN_PIN || '240024')).digest(),
   timezone: env.TZ_NAME || 'Asia/Kolkata',
