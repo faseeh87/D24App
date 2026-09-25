@@ -1,0 +1,9 @@
+{
+  "name": "D24 Studio",
+  "short_name": "D24 Studio",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#15100D",
+  "theme_color": "#15100D",
+  "icons": [{ "src": "/assets/logo-stacked.png", "sizes": "719x719", "type": "image/png", "purpose": "any" }]
+}

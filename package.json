@@ -1,0 +1,17 @@
+{
+  "name": "d24-studio-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "D24 Studio customer app: OTP login, vehicles, invoices, ceramic and PPF warranties, service bookings and reminders, with a staff panel.",
+  "main": "server/index.js",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server/index.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch server/index.js",
+    "seed": "node --disable-warning=ExperimentalWarning server/seed.js",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js"
+  },
+  "license": "UNLICENSED"
+}
