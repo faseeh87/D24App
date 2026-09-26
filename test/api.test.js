@@ -168,3 +168,25 @@ test('booking options follow the vehicle class', async () => {
   assert.match(no.body.error, /motorcycles/);
   assert.equal((await c('/api/bookings', { method: 'POST', body: { vehicle_id: bike.id, service: 'Bike wash', date, slot: studio.slots[2] } })).status, 200);
 });
+
+test('cars and motorcycles have separate slot limits', async () => {
+  const c = demo;
+  const { vehicles } = (await c('/api/vehicles')).body;
+  const car = vehicles.find((v) => v.kind === 'car');
+  const bike = vehicles.find((v) => v.kind === 'bike');
+  let date = new Date(Date.now() + 86400000 * 5);
+  if (date.getUTCDay() === 0) date = new Date(date.getTime() + 86400000);
+  date = date.toISOString().slice(0, 10);
+  const slot = (await c('/api/studio')).body.slots[4];
+  const book = (v, service) => c('/api/bookings', { method: 'POST', body: { vehicle_id: v.id, service, date, slot } });
+  assert.equal((await book(car, 'Car wash')).status, 200);
+  assert.equal((await book(car, 'Car wash')).status, 200);
+  assert.equal((await book(car, 'Car wash')).status, 409);           // cars full
+  const carView = (await c(`/api/slots?date=${date}&vehicle_id=${car.id}`)).body.slots.find((s) => s.slot === slot);
+  const bikeView = (await c(`/api/slots?date=${date}&vehicle_id=${bike.id}`)).body.slots.find((s) => s.slot === slot);
+  assert.equal(carView.available, false);
+  assert.equal(bikeView.left, 2);
+  assert.equal((await book(bike, 'Bike wash')).status, 200);         // bikes still open
+  assert.equal((await book(bike, 'Bike wash')).status, 200);
+  assert.equal((await book(bike, 'Bike wash')).status, 409);         // bikes full
+});

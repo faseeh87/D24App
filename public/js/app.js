@@ -466,7 +466,7 @@ async function viewBook(query) {
     const box = root.querySelector('#slots');
     if (!st.date) return;
     box.innerHTML = '<span class="hint">Checking availability…</span>';
-    const r = await api('/api/slots?date=' + st.date);
+    const r = await api(`/api/slots?date=${st.date}&vehicle_id=${st.vehicle_id}`);
     if (r.closed || !r.slots.length) { box.innerHTML = html`<span class="hint">Closed on this day. Sundays are by appointment: please call us.</span>`.s; return; }
     if (!r.slots.find((s) => s.slot === st.slot && s.available)) st.slot = '';
     box.className = 'slots';
@@ -481,9 +481,9 @@ async function viewBook(query) {
       const on = st.service_id !== s.id;
       st.service_id = on ? s.id : null;
       if (on) { st.vehicle_id = s.vehicle_id; if (S.services.includes(s.title)) st.service = s.title; }
-      press('[data-due]', 'due', st.service_id); press('[data-veh]', 'veh', st.vehicle_id); renderServices();
+      press('[data-due]', 'due', st.service_id); press('[data-veh]', 'veh', st.vehicle_id); renderServices(); loadSlots();
     } else if (b.dataset.veh) {
-      st.vehicle_id = Number(b.dataset.veh); press('[data-veh]', 'veh', st.vehicle_id); renderServices();
+      st.vehicle_id = Number(b.dataset.veh); press('[data-veh]', 'veh', st.vehicle_id); renderServices(); loadSlots();
       const s = dueServices.find((x) => x.id === st.service_id);
       if (s && s.vehicle_id !== st.vehicle_id) { st.service_id = null; press('[data-due]', 'due', null); }
     } else if (b.dataset.svc) {

@@ -161,14 +161,17 @@ async function runReminders(customerId) {
 }
 
 // ---------- slots ----------
-async function slotAvailability(date, q = db) {
-  const rows = await q.all(`SELECT slot, COUNT(*) AS n FROM bookings WHERE date = ? AND status IN ('requested','confirmed')
-                       GROUP BY slot`, date);
+/** Open places per slot for one vehicle class (cars and motorcycles have separate limits). */
+async function slotAvailability(date, kind = 'car', q = db) {
+  const rows = await q.all(`SELECT b.slot, COUNT(*) AS n FROM bookings b JOIN vehicles v ON v.id = b.vehicle_id
+                       WHERE b.date = ? AND b.status IN ('requested','confirmed') AND v.kind = ?
+                       GROUP BY b.slot`, date, kind);
+  const capacity = config.booking.slotCapacity[kind] ?? config.booking.slotCapacity.car;
   const used = Object.fromEntries(rows.map((r) => [r.slot, r.n]));
   const t = today();
   const nowHm = new Intl.DateTimeFormat('en-GB', { timeZone: config.timezone, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date());
   return config.booking.slots.map((slot) => {
-    const left = Math.max(0, config.booking.slotCapacity - (used[slot] || 0));
+    const left = Math.max(0, capacity - (used[slot] || 0));
     const past = date === t && slot <= nowHm;
     return { slot, left: past ? 0 : left, available: !past && left > 0 };
   });

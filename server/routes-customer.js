@@ -137,7 +137,8 @@ module.exports = function register(r) {
     const date = ctx.query.date;
     if (!isDate(date)) throw bad('Invalid date');
     const closed = weekday(date) === 0;
-    return { date, closed, slots: closed ? [] : await D.slotAvailability(date) };
+    const kind = ctx.query.vehicle_id ? (await own('vehicles', ctx.query.vehicle_id, ctx.customer.id)).kind : 'car';
+    return { date, closed, kind, slots: closed ? [] : await D.slotAvailability(date, kind) };
   });
 
   r.get('/api/bookings', me, async (ctx) => ({
@@ -168,7 +169,7 @@ module.exports = function register(r) {
         if (linked.status !== 'due') throw bad('This service is already booked or completed');
         if (linked.vehicle_id !== vehicle.id) throw bad('That service belongs to a different vehicle');
       }
-      const slot = (await D.slotAvailability(date, tx)).find((s) => s.slot === b.slot);
+      const slot = (await D.slotAvailability(date, vehicle.kind, tx)).find((s) => s.slot === b.slot);
       if (!slot || !slot.available) throw new HttpError(409, 'That slot has just filled up. Please pick another time.');
       const res = await tx.run('INSERT INTO bookings (customer_id, vehicle_id, service_id, service, date, slot, notes) VALUES (?, ?, ?, ?, ?, ?, ?)',
         cid, vehicle.id, linked?.id ?? null, service, date, b.slot, notes);
