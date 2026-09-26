@@ -55,7 +55,9 @@ module.exports = {
   },
 
   otp: { ttlSec: 300, maxAttempts: 5, resendSec: 30, maxPerHour: 5 },
-  session: { customerDays: 30, adminHours: 12 },
+  // Sessions stay signed in until the person signs out. Browsers cap cookie lifetime
+  // (Chrome: 400 days), so each visit renews the session for another 400 days.
+  session: { days: 400, renewAfterSec: 86400 },
 
   reminders: {
     upcomingDays: Number(env.REMINDER_DAYS || 14),

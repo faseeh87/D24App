@@ -15,7 +15,7 @@ let srv;
 
 function client() {
   let cookie = '';
-  return async (p, { method = 'GET', body, csrf = true } = {}) => {
+  const call = async (p, { method = 'GET', body, csrf = true } = {}) => {
     const headers = { cookie };
     if (method !== 'GET') { headers['content-type'] = 'application/json'; if (csrf) headers['x-d24'] = '1'; }
     const res = await fetch(BASE + p, { method, headers, body: body ? JSON.stringify(body) : undefined });
@@ -23,6 +23,8 @@ function client() {
     for (const c of set) { const kv = c.split(';')[0]; const [k] = kv.split('='); cookie = cookie.split('; ').filter((x) => x && !x.startsWith(k + '=')).concat(kv).join('; '); }
     return { status: res.status, body: await res.json().catch(() => ({})) };
   };
+  call.cookie = () => cookie;
+  return call;
 }
 
 async function login(c, phone) {
@@ -189,4 +191,19 @@ test('cars and motorcycles have separate slot limits', async () => {
   assert.equal((await book(bike, 'Bike wash')).status, 200);         // bikes still open
   assert.equal((await book(bike, 'Bike wash')).status, 200);
   assert.equal((await book(bike, 'Bike wash')).status, 409);         // bikes full
+});
+
+test('sessions renew on use and do not expire while in use', async () => {
+  const dbFile = process.env.TEST_REMOTE ? path.join(dir, 'remote.db') : env.DB_PATH;
+  const { DatabaseSync } = require('node:sqlite');
+  // Make the demo customer's session look like it expires in one hour.
+  const conn = new DatabaseSync(dbFile);
+  conn.exec(`PRAGMA busy_timeout = 5000; UPDATE sessions SET expires_at = CAST(strftime('%s','now') AS INTEGER) + 3600 WHERE role = 'customer'`);
+  const res = await fetch(BASE + '/api/me', { headers: { cookie: demo.cookie() } });
+  assert.equal(res.status, 200);
+  const set = (res.headers.getSetCookie?.() || []).join(';');
+  assert.match(set, /Max-Age=34560000/); // 400 days
+  const left = conn.prepare(`SELECT MAX(expires_at) - CAST(strftime('%s','now') AS INTEGER) AS s FROM sessions WHERE role = 'customer'`).get().s;
+  conn.close();
+  assert.ok(left > 399 * 86400); // all were set to 1 hour; the one just used now runs 400 days
 });

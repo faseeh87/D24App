@@ -27,17 +27,26 @@ async function limit(key, max, windowSec) {
 // ---- sessions ----
 async function createSession(res, role, customerId, staffId = null) {
   const token = crypto.randomBytes(32).toString('base64url');
-  const ttl = role === 'admin' ? config.session.adminHours * 3600 : config.session.customerDays * 86400;
+  const ttl = config.session.days * 86400;
   await db.run('INSERT INTO sessions (token_hash, role, customer_id, staff_id, expires_at) VALUES (?, ?, ?, ?, ?)', sha(token), role, customerId ?? null, staffId, now() + ttl);
   setCookie(res, role === 'admin' ? ADMIN_COOKIE : CUSTOMER_COOKIE, token, { maxAge: ttl });
 }
 
 async function readSession(ctx, role) {
-  const token = ctx.cookies[role === 'admin' ? ADMIN_COOKIE : CUSTOMER_COOKIE];
+  const name = role === 'admin' ? ADMIN_COOKIE : CUSTOMER_COOKIE;
+  const token = ctx.cookies[name];
   if (!token) return null;
   const s = await db.get('SELECT * FROM sessions WHERE token_hash = ? AND role = ?', sha(token), role);
   if (!s) return null;
-  if (s.expires_at < now()) { await db.run('DELETE FROM sessions WHERE token_hash = ?', s.token_hash); return null; }
+  const t = now();
+  if (s.expires_at < t) { await db.run('DELETE FROM sessions WHERE token_hash = ?', s.token_hash); return null; }
+  // Sliding renewal: at most once a day, push expiry out by the full lifetime again,
+  // so a session only ends when the person signs out (or is signed out by the studio).
+  const ttl = config.session.days * 86400;
+  if (s.expires_at - t < ttl - config.session.renewAfterSec) {
+    await db.run('UPDATE sessions SET expires_at = ? WHERE token_hash = ?', t + ttl, s.token_hash);
+    if (ctx.res && !ctx.res.headersSent) setCookie(ctx.res, name, token, { maxAge: ttl });
+  }
   return s;
 }
 
