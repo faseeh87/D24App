@@ -35,7 +35,7 @@ async function own(table, id, customerId, q = db) {
 module.exports = function register(r) {
   const me = auth.requireCustomer;
 
-  r.get('/api/studio', () => ({ studio: config.studio, services: config.services, slots: config.booking.slots }));
+  r.get('/api/studio', () => ({ studio: config.studio, services: config.services, catalog: config.serviceCatalog, slots: config.booking.slots }));
 
   // ---- auth ----
   r.post('/api/auth/otp', auth.requestOtp);
@@ -150,6 +150,10 @@ module.exports = function register(r) {
     const vehicle = await own('vehicles', b.vehicle_id, cid);
     const service = str(b.service, 80);
     if (!config.services.includes(service)) throw bad('Choose a service');
+    // Services must match the vehicle class (a due warranty inspection is always allowed).
+    if (!b.service_id && !config.servicesFor(vehicle.kind).includes(service)) {
+      throw bad(`${service} isn’t offered for ${vehicle.kind === 'bike' ? 'motorcycles' : 'cars'}. Please choose another service.`);
+    }
     const date = b.date;
     const t = today();
     if (!isDate(date) || date < t || date > addDays(t, config.booking.maxDaysAhead)) throw bad('Choose a date within the next 90 days');

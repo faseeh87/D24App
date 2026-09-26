@@ -81,17 +81,20 @@ module.exports = {
     maps: 'https://maps.google.com/?q=D24+Studio+Pandeshwar+Mangaluru',
   },
 
-  services: [
-    'Maintenance wash',
-    'Ceramic coating inspection',
-    'PPF inspection',
-    'Ceramic coating',
-    'Paint protection film (PPF)',
-    'Paint correction',
-    'Interior detailing',
-    'Car wash',
-    'Headlight restoration',
-    'Engine bay detailing',
-    'Motorcycle ceramic / PPF',
+  // Bookable services by vehicle class. `kinds` lists the classes each one is offered for.
+  serviceCatalog: [
+    { name: 'Maintenance wash', kinds: ['car'] },
+    { name: 'Car wash', kinds: ['car'] },
+    { name: 'Bike wash', kinds: ['bike'] },
+    { name: 'Ceramic coating inspection', kinds: ['car', 'bike'] },
+    { name: 'PPF inspection', kinds: ['car', 'bike'] },
+    { name: 'Ceramic coating', kinds: ['car', 'bike'] },
+    { name: 'Paint protection film (PPF)', kinds: ['car', 'bike'] },
+    { name: 'Paint correction', kinds: ['car'] },
+    { name: 'Interior detailing', kinds: ['car'] },
+    { name: 'Headlight restoration', kinds: ['car'] },
+    { name: 'Engine bay detailing', kinds: ['car'] },
   ],
 };
+module.exports.services = module.exports.serviceCatalog.map((s) => s.name);
+module.exports.servicesFor = (kind) => module.exports.serviceCatalog.filter((s) => s.kinds.includes(kind)).map((s) => s.name);

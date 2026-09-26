@@ -4,7 +4,7 @@ import {
 } from './core.js';
 
 const root = document.getElementById('app');
-const S = { me: null, studio: null, services: [], slots: [], unread: 0 };
+const S = { me: null, studio: null, services: [], catalog: [], slots: [], unread: 0 };
 
 const TABS = [
   ['home', '#/', 'Home'],
@@ -18,7 +18,7 @@ const TABS = [
 async function boot() {
   try {
     const st = await api('/api/studio');
-    S.studio = st.studio; S.services = st.services; S.slots = st.slots;
+    S.studio = st.studio; S.services = st.services; S.catalog = st.catalog || []; S.slots = st.slots;
     S.me = (await api('/api/me')).customer;
   } catch (e) {
     if (e.status === 401) return renderLogin();
@@ -426,7 +426,7 @@ async function viewBook(query) {
           <button type="button" class="choice card-row" data-due="${s.id}" aria-pressed="${st.service_id === s.id}" style="text-align:left;width:100%">
             <span class="grow"><b style="font-weight:600">${s.title}</b><br><span class="small" style="opacity:.75">${s.make} ${s.model} · ${fmtDate(s.due_on)}</span></span>${serviceChip(s)}</button>`)}</div></div>` : ''}
         <div class="field"><span>Vehicle</span><div class="choices" id="veh">${vehicles.map((v) => html`<button type="button" class="choice" data-veh="${v.id}" aria-pressed="${st.vehicle_id === v.id}">${v.make} ${v.model} · ${v.reg_no}</button>`)}</div></div>
-        <div class="field"><span>Service</span><div class="choices" id="svc">${S.services.map((s) => html`<button type="button" class="choice" data-svc="${s}" aria-pressed="${st.service === s}">${s}</button>`)}</div></div>
+        <div class="field"><span id="svc-label">Service</span><div class="choices" id="svc"></div></div>
         <div class="field"><span>Date</span>
           <div class="days" id="days">${days.map((d) => { const sun = new Date(d + 'T00:00:00Z').getUTCDay() === 0; return html`<button type="button" class="day" data-day="${d}" aria-pressed="false" ${sun ? raw('disabled title="Sundays by appointment: please call"') : ''}><small>${fmtDate(d, { weekday: 'short' })}</small><b>${fmtDate(d, { day: 'numeric' })}</b><small>${fmtDate(d, { month: 'short' })}</small></button>`; })}</div>
           <label class="hint" style="display:flex;gap:10px;align-items:center;margin-top:6px">Later date <input class="input" type="date" id="later" min="${addDays(t, 22)}" max="${addDays(t, 90)}" style="max-width:190px;min-height:40px;padding:6px 10px;font-size:14px"></label>
@@ -449,6 +449,17 @@ async function viewBook(query) {
 
   if (!vehicles.length) return;
   const f = root.querySelector('#bf');
+  // Service options follow the class (car / motorcycle) of the selected vehicle.
+  const kindOf = (id) => vehicles.find((v) => v.id === id)?.kind || 'car';
+  const servicesFor = (kind) => S.catalog.filter((c) => c.kinds.includes(kind)).map((c) => c.name);
+  function renderServices() {
+    const kind = kindOf(st.vehicle_id);
+    const list = servicesFor(kind);
+    if (st.service && !list.includes(st.service)) st.service = '';
+    root.querySelector('#svc-label').textContent = kind === 'bike' ? 'Service · motorcycle' : 'Service · car';
+    root.querySelector('#svc').innerHTML = list.map((s) => html`<button type="button" class="choice" data-svc="${s}" aria-pressed="${st.service === s}">${s}</button>`.s).join('');
+  }
+  renderServices();
   const press = (sel, attr, value) => root.querySelectorAll(sel).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset[attr] === String(value))));
 
   async function loadSlots() {
@@ -470,9 +481,9 @@ async function viewBook(query) {
       const on = st.service_id !== s.id;
       st.service_id = on ? s.id : null;
       if (on) { st.vehicle_id = s.vehicle_id; if (S.services.includes(s.title)) st.service = s.title; }
-      press('[data-due]', 'due', st.service_id); press('[data-veh]', 'veh', st.vehicle_id); press('[data-svc]', 'svc', st.service);
+      press('[data-due]', 'due', st.service_id); press('[data-veh]', 'veh', st.vehicle_id); renderServices();
     } else if (b.dataset.veh) {
-      st.vehicle_id = Number(b.dataset.veh); press('[data-veh]', 'veh', st.vehicle_id);
+      st.vehicle_id = Number(b.dataset.veh); press('[data-veh]', 'veh', st.vehicle_id); renderServices();
       const s = dueServices.find((x) => x.id === st.service_id);
       if (s && s.vehicle_id !== st.vehicle_id) { st.service_id = null; press('[data-due]', 'due', null); }
     } else if (b.dataset.svc) {

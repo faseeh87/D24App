@@ -151,3 +151,20 @@ test('admin issues invoice and warranty; schedule is generated', async () => {
   // customer endpoints do not accept admin session
   assert.equal((await a('/api/dashboard')).status, 401);
 });
+
+test('booking options follow the vehicle class', async () => {
+  const c = demo;
+  const { vehicles } = (await c('/api/vehicles')).body;
+  const bike = vehicles.find((v) => v.kind === 'bike');
+  const studio = (await c('/api/studio')).body;
+  const bikeServices = studio.catalog.filter((s) => s.kinds.includes('bike')).map((s) => s.name);
+  assert.ok(bikeServices.includes('Bike wash'));
+  assert.ok(!bikeServices.includes('Interior detailing'));
+  let date = new Date(Date.now() + 86400000 * 3);
+  if (date.getUTCDay() === 0) date = new Date(date.getTime() + 86400000);
+  date = date.toISOString().slice(0, 10);
+  const no = await c('/api/bookings', { method: 'POST', body: { vehicle_id: bike.id, service: 'Interior detailing', date, slot: '14:00' } });
+  assert.equal(no.status, 400);
+  assert.match(no.body.error, /motorcycles/);
+  assert.equal((await c('/api/bookings', { method: 'POST', body: { vehicle_id: bike.id, service: 'Bike wash', date, slot: '14:00' } })).status, 200);
+});
