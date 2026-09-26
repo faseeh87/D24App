@@ -403,6 +403,14 @@ const MIGRATIONS = [
     await b.run('DELETE FROM bookings');
     await b.run('DELETE FROM warranties');
   }],
+  // One-time clean-up requested by the studio (Sep 2026): remove all invoices and payments so far.
+  ['m7_purge_invoices_2026_09', async (b) => {
+    await b.run('UPDATE warranties SET invoice_id = NULL, invoice_line = NULL WHERE invoice_id IS NOT NULL');
+    await b.run('DELETE FROM payments');
+    await b.run(`DELETE FROM discount_requests WHERE status = 'used'`);
+    await b.run(`DELETE FROM notifications WHERE kind = 'invoice' AND dedupe_key LIKE 'invoice:%'`);
+    await b.run('DELETE FROM invoices');
+  }],
   // Starting usage standards per vehicle (editable by the Super Admin).
   ['m6_default_usage_standards', async (b) => {
     const rows = [
