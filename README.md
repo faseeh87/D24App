@@ -34,6 +34,13 @@ npm test                           # API tests
 
 In development, `SMS_PROVIDER=console` prints OTP codes in the server log and shows them on the sign-in screen. The default staff PIN is `240024`. In production both `SESSION_SECRET` and `ADMIN_PIN` are required.
 
+## Staff roles
+
+- **Super Admin**: signs in with the owner PIN (`SUPER_ADMIN_PIN`, or `ADMIN_PIN` for existing setups) or a Super Admin PIN created in Settings. Can change customers' mobile numbers, issue warranties, approve discounts, see revenue (day/week/month/year), record expenses (rent, inventory, salary, maintenance) with a next-month forecast, set up inventory and usage standards, manage staff, and connect Instagram/YouTube for interaction alerts.
+- **Admin**: PIN created by the Super Admin. Handles customers, vehicles, invoices and payments, bookings, completing jobs, and receiving stock. Can't give a discount; they send a discount request, and once the Super Admin approves it they apply it when creating the invoice.
+- **Warranties** are issued automatically when an invoice with no discount is fully paid, as long as a line is marked with warranty details. A discounted invoice's warranty is issued by the Super Admin.
+- **Inventory**: items by brand and sub-brand, with pack size and quantity. Each completed booking deducts the standard amount per service and vehicle type, and staff pick the product used. Low stock alerts the Super Admin, and a service stops taking bookings once stock can't cover one more vehicle after the bookings already taken.
+
 ## Deploying on Vercel
 
 The repo is ready for Vercel as it is. The `public/` folder is served as static files, `api/index.js` handles every `/api/*` request, and `vercel.json` sets the Mumbai region (`bom1`), security headers and a daily reminder cron.

@@ -3,6 +3,7 @@ const config = require('./config');
 const db = require('./db');
 const auth = require('./auth');
 const D = require('./domain');
+const INV = require('./inventory');
 const { today, addDays, isDate, weekday, str, fmtDate, bad, HttpError } = require('./util');
 
 const REG_RE = /^[A-Z0-9 -]{4,15}$/;
@@ -141,6 +142,13 @@ module.exports = function register(r) {
     return { date, closed, kind, slots: closed ? [] : await D.slotAvailability(date, kind) };
   });
 
+  // Services that can't be booked right now (stock below one vehicle).
+  r.get('/api/service-availability', me, async (ctx) => {
+    const v = await own('vehicles', ctx.query.vehicle_id, ctx.customer.id);
+    const av = await INV.availability(v.kind);
+    return { kind: v.kind, unavailable: Object.entries(av).filter(([, a]) => !a.available).map(([s]) => s) };
+  });
+
   r.get('/api/bookings', me, async (ctx) => ({
     bookings: await D.mapAll(await db.all('SELECT * FROM bookings WHERE customer_id = ? ORDER BY date DESC, slot DESC', ctx.customer.id), D.bookingView),
   }));
@@ -169,6 +177,8 @@ module.exports = function register(r) {
         if (linked.status !== 'due') throw bad('This service is already booked or completed');
         if (linked.vehicle_id !== vehicle.id) throw bad('That service belongs to a different vehicle');
       }
+      // Stop bookings for a service once stock falls below what one vehicle needs.
+      if (!linked) await INV.assertBookable(service, vehicle.kind, tx);
       const slot = (await D.slotAvailability(date, vehicle.kind, tx)).find((s) => s.slot === b.slot);
       if (!slot || !slot.available) throw new HttpError(409, 'That slot has just filled up. Please pick another time.');
       const res = await tx.run('INSERT INTO bookings (customer_id, vehicle_id, service_id, service, date, slot, notes) VALUES (?, ?, ?, ?, ?, ?, ?)',

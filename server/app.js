@@ -7,6 +7,8 @@ const db = require('./db');
 const { Router, createHandler } = require('./http');
 const { runReminders } = require('./domain');
 const { cleanup } = require('./auth');
+const INV = require('./inventory');
+const SOCIAL = require('./social');
 const { HttpError } = require('./util');
 
 const router = new Router();
@@ -19,6 +21,9 @@ router.get('/api/health', async () => { await db.init(); return { ok: true, db: 
 async function sweep() {
   await runReminders();
   await cleanup();
+  await INV.checkStockAlerts();
+  const social = await SOCIAL.check().catch((e) => ({ error: e.message }));
+  if (Object.keys(social).length) console.log('[social]', JSON.stringify(social).slice(0, 500));
 }
 router.get('/api/cron/reminders', async (ctx) => {
   // Vercel Cron sends "Authorization: Bearer $CRON_SECRET".

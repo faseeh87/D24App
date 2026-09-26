@@ -30,8 +30,10 @@ async function main() {
     const subtotal = list.reduce((s, i) => s + i.qty * i.rate, 0);
     const tax = Math.round(subtotal * config.gstRate / 100);
     const no = await D.nextInvoiceNo(tx, issued);
-    return (await tx.run(`INSERT INTO invoices (invoice_no, customer_id, vehicle_id, issued_on, items, subtotal, discount, tax_rate, tax, total, status, paid_on, payment_mode)
-      VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 'paid', ?, ?)`, no, cid, vehicleId, issued, JSON.stringify(list), subtotal, config.gstRate, tax, subtotal + tax, issued, mode)).lastInsertRowid;
+    const id = (await tx.run(`INSERT INTO invoices (invoice_no, customer_id, vehicle_id, issued_on, items, subtotal, discount, tax_rate, tax, total, status, paid_on, payment_mode, amount_paid)
+      VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 'paid', ?, ?, ?)`, no, cid, vehicleId, issued, JSON.stringify(list), subtotal, config.gstRate, tax, subtotal + tax, issued, mode, subtotal + tax)).lastInsertRowid;
+    await tx.run('INSERT INTO payments (invoice_id, amount, mode, paid_on) VALUES (?, ?, ?, ?)', id, subtotal + tax, mode, issued);
+    return id;
   });
 
   const warranty = (vehicleId, invoiceId, kind, brand, product, coverage, starts, years, interval) => db.tx(async (tx) => {

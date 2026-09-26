@@ -39,6 +39,7 @@ async function route() {
   if (!S.me.name) return renderWelcome();
   const { parts, query } = parseHash();
   const [a, b] = parts;
+  document.querySelectorAll('.sheet-bg').forEach((el) => el.remove());
   window.scrollTo(0, 0);
   try {
     if (!a) return await viewHome();
@@ -272,9 +273,14 @@ function warrantyCard(w) {
   </a>`;
 }
 
+function payChip(i) {
+  if (i.amount_paid >= i.total) return html`<span class="chip ok">Paid</span>`;
+  return i.amount_paid > 0 ? html`<span class="chip warn">Part paid</span>` : html`<span class="chip warn">Due</span>`;
+}
+
 function invoiceRow(i, card = false) {
   const body = html`<div class="grow"><p class="mono">${i.invoice_no}</p><p class="muted small">${fmtDate(i.issued_on)}${i.vehicle_label ? ' · ' + i.vehicle_label : ''}</p></div>
-    <div style="text-align:right"><p class="num" style="font-weight:600">${money(i.total)}</p>${i.status === 'paid' ? html`<span class="chip ok">Paid</span>` : html`<span class="chip warn">Due</span>`}</div>${icon('right', 'chev')}`;
+    <div style="text-align:right"><p class="num" style="font-weight:600">${money(i.total)}</p>${payChip(i)}</div>${icon('right', 'chev')}`;
   return card ? html`<div class="list"><a href="#/invoice/${i.id}">${body}</a></div>` : html`<a href="#/invoice/${i.id}">${body}</a>`;
 }
 
@@ -311,20 +317,21 @@ async function viewInvoice(id) {
       <div class="paper-meta">
         <div><span class="label">Billed to</span><p style="margin-top:6px"><b>${c.name}</b><br>${fmtPhone(c.phone)}${c.email ? html`<br>${c.email}` : ''}</p></div>
         <div><span class="label">Vehicle</span><p style="margin-top:6px">${v ? html`<b>${v.make} ${v.model}</b><br>${v.reg_no}${v.year ? ` · ${v.year}` : ''}${v.colour ? ` · ${v.colour}` : ''}` : '—'}</p></div>
-        <div><span class="label">Date</span><p style="margin-top:6px"><b>${fmtDate(i.issued_on)}</b><br>${i.status === 'paid' ? `Paid${i.payment_mode ? ' via ' + i.payment_mode : ''}` : 'Payment due'}</p></div>
+        <div><span class="label">Date</span><p style="margin-top:6px"><b>${fmtDate(i.issued_on)}</b><br>${i.amount_paid >= i.total ? `Paid${i.payment_mode ? ' via ' + i.payment_mode : ''}` : i.amount_paid > 0 ? `Part paid: ${money(i.amount_paid)}` : 'Payment due'}</p></div>
       </div>
       <table>
         <thead><tr><th style="width:36px">#</th><th>Description</th><th class="r">Qty</th><th class="r">Rate</th><th class="r">Amount</th></tr></thead>
         <tbody>${i.items.map((it, n) => html`<tr><td>${n + 1}</td><td>${it.desc}</td><td class="r num">${it.qty}</td><td class="r num">${money(it.rate)}</td><td class="r num">${money(it.qty * it.rate)}</td></tr>`)}</tbody>
       </table>
       <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:24px;flex-wrap:wrap">
-        <div style="margin-top:22px">${i.status === 'paid' ? html`<span class="stamp">Paid</span>` : html`<span class="stamp due">Due</span>`}</div>
+        <div style="margin-top:22px">${i.amount_paid >= i.total ? html`<span class="stamp">Paid</span>` : html`<span class="stamp due">${i.amount_paid > 0 ? 'Part paid' : 'Due'}</span>`}</div>
         <div class="totals num">
           <div><span>Subtotal</span><span>${money(i.subtotal)}</span></div>
           ${i.discount ? html`<div><span>Discount</span><span>− ${money(i.discount)}</span></div>` : ''}
           <div><span>CGST ${i.tax_rate / 2}%</span><span>${money(Math.floor(i.tax / 2))}</span></div>
           <div><span>SGST ${i.tax_rate / 2}%</span><span>${money(i.tax - Math.floor(i.tax / 2))}</span></div>
           <div class="grand"><span>Total</span><span>${money(i.total)}</span></div>
+          ${i.amount_paid > 0 && i.amount_paid < i.total ? html`<div><span>Paid</span><span>${money(i.amount_paid)}</span></div><div><b>Balance due</b><b>${money(i.total - i.amount_paid)}</b></div>` : ''}
         </div>
       </div>
       ${i.notes ? html`<p class="small" style="margin-top:22px"><span class="label">Notes</span><br>${i.notes}</p>` : ''}
@@ -452,13 +459,23 @@ async function viewBook(query) {
   // Service options follow the class (car / motorcycle) of the selected vehicle.
   const kindOf = (id) => vehicles.find((v) => v.id === id)?.kind || 'car';
   const servicesFor = (kind) => S.catalog.filter((c) => c.kinds.includes(kind)).map((c) => c.name);
+  let paused = [];
   function renderServices() {
     const kind = kindOf(st.vehicle_id);
     const list = servicesFor(kind);
-    if (st.service && !list.includes(st.service)) st.service = '';
+    if (st.service && (!list.includes(st.service) || (paused.includes(st.service) && !st.service_id))) st.service = '';
     root.querySelector('#svc-label').textContent = kind === 'bike' ? 'Service · motorcycle' : 'Service · car';
-    root.querySelector('#svc').innerHTML = list.map((s) => html`<button type="button" class="choice" data-svc="${s}" aria-pressed="${st.service === s}">${s}</button>`.s).join('');
+    root.querySelector('#svc').innerHTML = list.map((s) => {
+      const off = paused.includes(s) && !(st.service_id && st.service === s);
+      return html`<button type="button" class="choice" data-svc="${s}" aria-pressed="${st.service === s}" ${off ? raw('disabled title="Temporarily unavailable while we restock"') : ''}>${s}${off ? html` <small class="muted">· unavailable</small>` : ''}</button>`.s;
+    }).join('');
   }
+  // Services paused because stock is below one vehicle
+  async function loadAvailability() {
+    try { paused = (await api('/api/service-availability?vehicle_id=' + st.vehicle_id)).unavailable; } catch { paused = []; }
+    renderServices();
+  }
+  loadAvailability();
   renderServices();
   const press = (sel, attr, value) => root.querySelectorAll(sel).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset[attr] === String(value))));
 
@@ -481,9 +498,9 @@ async function viewBook(query) {
       const on = st.service_id !== s.id;
       st.service_id = on ? s.id : null;
       if (on) { st.vehicle_id = s.vehicle_id; if (S.services.includes(s.title)) st.service = s.title; }
-      press('[data-due]', 'due', st.service_id); press('[data-veh]', 'veh', st.vehicle_id); renderServices(); loadSlots();
+      press('[data-due]', 'due', st.service_id); press('[data-veh]', 'veh', st.vehicle_id); loadAvailability(); loadSlots();
     } else if (b.dataset.veh) {
-      st.vehicle_id = Number(b.dataset.veh); press('[data-veh]', 'veh', st.vehicle_id); renderServices(); loadSlots();
+      st.vehicle_id = Number(b.dataset.veh); press('[data-veh]', 'veh', st.vehicle_id); loadAvailability(); loadSlots();
       const s = dueServices.find((x) => x.id === st.service_id);
       if (s && s.vehicle_id !== st.vehicle_id) { st.service_id = null; press('[data-due]', 'due', null); }
     } else if (b.dataset.svc) {

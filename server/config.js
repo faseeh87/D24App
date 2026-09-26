@@ -22,8 +22,8 @@ if (!secret) {
   if (production) throw new Error('SESSION_SECRET must be set in production');
   secret = 'dev-only-secret-change-me';
 }
-if (production && (!env.ADMIN_PIN || env.ADMIN_PIN.length < 6)) {
-  throw new Error('ADMIN_PIN (6+ characters) must be set in production');
+if (production && String(env.SUPER_ADMIN_PIN || env.ADMIN_PIN || '').length < 6) {
+  throw new Error('SUPER_ADMIN_PIN or ADMIN_PIN (6+ characters) must be set in production');
 }
 
 module.exports = {
@@ -39,7 +39,8 @@ module.exports = {
   // Shows the OTP on screen instead of requiring SMS. For testing before an SMS provider is set up only.
   otpOnScreen: env.OTP_ON_SCREEN === 'true',
   secret,
-  adminPinHash: crypto.createHash('sha256').update(String(env.ADMIN_PIN || '240024')).digest(),
+  // Owner / Super Admin PIN. SUPER_ADMIN_PIN takes precedence; ADMIN_PIN kept for existing setups.
+  adminPinHash: crypto.createHash('sha256').update(String(env.SUPER_ADMIN_PIN || env.ADMIN_PIN || '240024')).digest(),
   timezone: env.TZ_NAME || 'Asia/Kolkata',
 
   sms: {

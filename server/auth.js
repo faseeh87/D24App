@@ -25,10 +25,10 @@ async function limit(key, max, windowSec) {
 }
 
 // ---- sessions ----
-async function createSession(res, role, customerId) {
+async function createSession(res, role, customerId, staffId = null) {
   const token = crypto.randomBytes(32).toString('base64url');
   const ttl = role === 'admin' ? config.session.adminHours * 3600 : config.session.customerDays * 86400;
-  await db.run('INSERT INTO sessions (token_hash, role, customer_id, expires_at) VALUES (?, ?, ?, ?)', sha(token), role, customerId ?? null, now() + ttl);
+  await db.run('INSERT INTO sessions (token_hash, role, customer_id, staff_id, expires_at) VALUES (?, ?, ?, ?, ?)', sha(token), role, customerId ?? null, staffId, now() + ttl);
   setCookie(res, role === 'admin' ? ADMIN_COOKIE : CUSTOMER_COOKIE, token, { maxAge: ttl });
 }
 
@@ -56,8 +56,39 @@ async function requireCustomer(ctx) {
   if (!ctx.customer) throw new HttpError(401, 'Please sign in');
 }
 
+/** Middleware: any signed-in staff member (Admin or Super Admin). Sets ctx.staff. */
 async function requireAdmin(ctx) {
-  if (!(await readSession(ctx, 'admin'))) throw new HttpError(401, 'Staff sign-in required');
+  const sess = await readSession(ctx, 'admin');
+  if (!sess || !sess.staff_id) throw new HttpError(401, 'Staff sign-in required');
+  const staff = await db.get('SELECT id, name, role FROM staff WHERE id = ? AND active = 1', sess.staff_id);
+  if (!staff) throw new HttpError(401, 'Staff sign-in required');
+  ctx.staff = staff;
+}
+
+/** Middleware: Super Admin only. */
+async function requireSuper(ctx) {
+  await requireAdmin(ctx);
+  if (ctx.staff.role !== 'super') throw new HttpError(403, 'Only the Super Admin can do this');
+}
+
+// ---- staff PINs (scrypt with a per-staff salt) ----
+function hashPin(pin) {
+  const salt = crypto.randomBytes(16);
+  return salt.toString('hex') + ':' + crypto.scryptSync(String(pin), salt, 32).toString('hex');
+}
+function pinMatches(pin, stored) {
+  if (!stored) return false;
+  const [salt, hash] = stored.split(':');
+  const given = crypto.scryptSync(String(pin), Buffer.from(salt, 'hex'), 32);
+  return crypto.timingSafeEqual(given, Buffer.from(hash, 'hex'));
+}
+const isOwnerPin = (pin) => crypto.timingSafeEqual(crypto.createHash('sha256').update(String(pin)).digest(), config.adminPinHash);
+
+/** Is this PIN already used by the owner or another staff member? */
+async function pinTaken(pin, exceptId = 0) {
+  if (isOwnerPin(pin)) return true;
+  const rows = await db.all('SELECT id, pin_hash FROM staff WHERE active = 1 AND id != ?', exceptId);
+  return rows.some((r) => pinMatches(pin, r.pin_hash));
 }
 
 // ---- OTP ----
@@ -125,10 +156,21 @@ async function verifyOtp(ctx) {
 async function adminLogin(ctx) {
   await limit('admin-ip:' + ctx.ip, 10, 900);
   const pin = String(ctx.body.pin || '');
-  const given = crypto.createHash('sha256').update(pin).digest();
-  if (!crypto.timingSafeEqual(given, config.adminPinHash)) throw new HttpError(401, 'Incorrect PIN');
-  await createSession(ctx.res, 'admin');
-  return { ok: true };
+  let staff = null;
+  if (isOwnerPin(pin)) {
+    // The owner PIN (ADMIN_PIN / SUPER_ADMIN_PIN) always signs in as the built-in Super Admin.
+    staff = await db.get('SELECT * FROM staff WHERE builtin = 1');
+    if (!staff) {
+      const r = await db.run(`INSERT INTO staff (name, role, builtin) VALUES ('Owner', 'super', 1)`);
+      staff = await db.get('SELECT * FROM staff WHERE id = ?', r.lastInsertRowid);
+    }
+  } else {
+    const rows = await db.all('SELECT * FROM staff WHERE active = 1 AND builtin = 0 AND pin_hash IS NOT NULL');
+    staff = rows.find((r) => pinMatches(pin, r.pin_hash)) || null;
+  }
+  if (!staff) throw new HttpError(401, 'Incorrect PIN');
+  await createSession(ctx.res, 'admin', null, staff.id);
+  return { ok: true, staff: { id: staff.id, name: staff.name, role: staff.role } };
 }
 
 /** Housekeeping, run by the daily cron / hourly local sweep. */
@@ -138,4 +180,4 @@ async function cleanup() {
   await db.run('DELETE FROM rate_limits WHERE start < ?', t - 86400);
 }
 
-module.exports = { requestOtp, verifyOtp, adminLogin, requireCustomer, requireAdmin, destroySession, readSession, cleanup };
+module.exports = { requestOtp, verifyOtp, adminLogin, requireCustomer, requireAdmin, requireSuper, destroySession, readSession, cleanup, hashPin, pinTaken };

@@ -302,3 +302,20 @@ table.t tr.click:hover td{background:#271e19}
 .admin-nav{display:flex;overflow-x:auto;margin-left:12px}
 @media(max-width:899px){.topbar .label{display:none}.admin-nav a{padding:8px 8px;letter-spacing:.12em}}
 .field label.small{display:flex;gap:8px;align-items:center}
+@media(min-width:760px){.grid.four{grid-template-columns:repeat(4,1fr)}}
+@media(min-width:500px) and (max-width:759px){.grid.four{grid-template-columns:1fr 1fr}}
+a.stat{display:block;transition:border-color .2s}
+a.stat:hover{border-color:var(--rule-2)}
+.stat .muted.small{display:block;margin-top:6px}
+.role-tag{border-left:1px solid var(--rule);padding-left:14px;white-space:nowrap}
+.inv-line{border:1px solid var(--rule);padding:10px;margin-bottom:10px;background:var(--char)}
+.inv-line .items-grid{margin-bottom:6px}
+.warranty-toggle{display:flex;gap:8px;align-items:center;color:var(--dust);cursor:pointer}
+.warranty-box{margin-top:12px;padding-top:12px;border-top:1px dashed var(--rule-2)}
+.choice[disabled]{opacity:.45;cursor:not-allowed}
+a.alert{color:inherit}
+@media(max-width:899px){.role-tag{display:none}}
+/* staff panel is desktop-first: wider page and a tighter menu */
+body.staff{--w:1240px}
+.admin-nav a{letter-spacing:.14em;padding:8px 9px}
+@media(max-width:1279px){body.staff .role-tag{display:none}}
