@@ -62,7 +62,7 @@ module.exports = {
   },
 
   booking: {
-    slots: (env.BOOKING_SLOTS || '09:30,11:30,14:00,16:00').split(',').map(s => s.trim()),
+    slots: (env.BOOKING_SLOTS || '09:30,10:30,11:30,12:30,13:30,14:30,15:30,16:30,17:30,18:30').split(',').map(s => s.trim()),
     slotCapacity: Number(env.SLOT_CAPACITY || 2),
     maxDaysAhead: 90,
   },

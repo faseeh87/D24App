@@ -163,8 +163,8 @@ test('booking options follow the vehicle class', async () => {
   let date = new Date(Date.now() + 86400000 * 3);
   if (date.getUTCDay() === 0) date = new Date(date.getTime() + 86400000);
   date = date.toISOString().slice(0, 10);
-  const no = await c('/api/bookings', { method: 'POST', body: { vehicle_id: bike.id, service: 'Interior detailing', date, slot: '14:00' } });
+  const no = await c('/api/bookings', { method: 'POST', body: { vehicle_id: bike.id, service: 'Interior detailing', date, slot: studio.slots[2] } });
   assert.equal(no.status, 400);
   assert.match(no.body.error, /motorcycles/);
-  assert.equal((await c('/api/bookings', { method: 'POST', body: { vehicle_id: bike.id, service: 'Bike wash', date, slot: '14:00' } })).status, 200);
+  assert.equal((await c('/api/bookings', { method: 'POST', body: { vehicle_id: bike.id, service: 'Bike wash', date, slot: studio.slots[2] } })).status, 200);
 });
